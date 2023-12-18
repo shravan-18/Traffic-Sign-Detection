@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """
 # **Traffic Sign Prediction using Vision Transformer**
-
-# **Install and Import Libraries**
 """
+
+"""# **Install and Import Libraries**"""
 
 # Install necessary modules
 !pip install torch-summary
