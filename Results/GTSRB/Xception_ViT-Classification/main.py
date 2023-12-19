@@ -251,7 +251,7 @@ class Block(nn.Module):
         return x
 
 class Xception(nn.Module):
-    def __init__(self, num_classes=1000):
+    def __init__(self):
         super(Xception, self).__init__()
 
         self.num_classes = num_classes
