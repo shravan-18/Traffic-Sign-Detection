@@ -254,8 +254,6 @@ class Xception(nn.Module):
     def __init__(self):
         super(Xception, self).__init__()
 
-        self.num_classes = num_classes
-
         self.conv1 = nn.Conv2d(3, 32, 3, 2, 0, bias=False)
         self.bn1 = nn.BatchNorm2d(32)
         self.relu = nn.ReLU(inplace=True)
