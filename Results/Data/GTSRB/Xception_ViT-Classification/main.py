@@ -1,0 +1,780 @@
+# -*- coding: utf-8 -*-
+"""
+# **Traffic Sign Prediction using Vision Transformer**
+"""
+
+"""# **Install and Import Libraries**"""
+
+# Install necessary modules
+!pip install torch-summary
+!pip install torchmetrics
+
+# Import Dependencies
+import os
+import numpy as np
+import pandas as pd
+import cv2
+import random
+from glob import glob
+from sklearn.utils import shuffle
+from sklearn.model_selection import train_test_split
+import math
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.nn import init
+import torch
+from torchsummary import summary
+import torch
+from torchvision import datasets, transforms
+from torch.utils.data import DataLoader, random_split
+from typing import Dict, List, Tuple
+from tqdm import tqdm
+from torchmetrics import Accuracy, F1Score, Recall, Precision
+
+"""# **Define Hyperparameters and Order Data**"""
+
+# List of class names as considered by data loader
+x = ['Ahead only', 'Beware of icesnow', 'Bicycles crossing', 'Bumpy road', 'Children crossing', 'Dangerous curve left', 'Dangerous curve right', 'Double curve', 'End no passing veh _ 3.5 tons', 'End of no passing', 'End of speed limit (80kmh)', 'End speed + passing limits', 'General caution', 'Go straight or left', 'Go straight or right', 'Keep left', 'Keep right', 'No entry', 'No passing', 'No passing veh over 3.5 tons', 'No vehicles', 'Pedestrians', 'Priority road', 'Right-of-way at intersection', 'Road narrows on the right', 'Road work', 'Roundabout mandatory', 'Slippery road', 'Speed limit (100kmh)', 'Speed limit (120kmh)', 'Speed limit (20kmh)', 'Speed limit (30kmh)', 'Speed limit (50kmh)', 'Speed limit (60kmh)', 'Speed limit (70kmh)', 'Speed limit (80kmh)', 'Stop', 'Traffic signals', 'Turn left ahead', 'Turn right ahead', 'Veh _ 3.5 tons prohibited', 'Wild animals crossing', 'Yield']
+
+# Convert list of class names into dictionary
+classes = {key: value for key, value in enumerate(x)}
+classes
+
+"""# **Data Loader Functions**"""
+
+# Define Image Transforms
+transform = transforms.Compose([
+    transforms.Resize((81, 81)),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+])
+
+# Create Dataset of entire data
+full_dataset = datasets.ImageFolder(root='/kaggle/input/adversarial-gtsrb-data/Adversarial-GTSRB-Data', transform=transform)
+
+train_size = int(0.8 * len(full_dataset)) # Split data count into training and validation splits in the ratio 80% to 20%
+val_size = len(full_dataset) - train_size
+train_dataset, val_dataset = random_split(full_dataset, [train_size, val_size]) # Split the data
+
+batch_size = 128  #Set batch size
+train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4) # Create train dataloader
+val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True, num_workers=4) # Create valiation dataloader
+
+"""# **ViT Model Functions**"""
+
+# References: https://github.com/AarohiSingla/Image-Classification-Using-Vision-transformer
+
+# Patch Embedding Class
+class PatchEmbedding(nn.Module):
+    '''
+    Creates Patch Embedding layer to patch the input features from Xception model backbone, and flattens it.
+    '''
+    def __init__(self,
+                 in_channels:int=3,
+                 patch_size:int=3,
+                 embedding_dim:int=3*3*3):
+        super().__init__()
+
+        #  Layer to turn features into patches
+        self.patcher = nn.Conv2d(in_channels=in_channels,
+                                 out_channels=embedding_dim,
+                                 kernel_size=patch_size,
+                                 stride=patch_size,
+                                 padding=0)
+
+        #  Layer to flatten the patch feature maps into a single dimension
+        self.flatten = nn.Flatten(start_dim=2, end_dim=3)
+
+
+    def forward(self, x):
+
+        x_patched = self.patcher(x)
+        x_flattened = self.flatten(x_patched)
+
+        return x_flattened.permute(0, 2, 1)
+
+# Multi-head Self Attention Class
+class MultiheadSelfAttentionBlock(nn.Module):
+    """
+    Creates a multi-head self-attention block.
+    """
+
+    def __init__(self,
+                 embedding_dim:int=3*3*3,
+                 num_heads:int=3,
+                 attn_dropout:float=0):
+        super().__init__()
+
+        # Layer Normalization
+        self.layer_norm = nn.LayerNorm(normalized_shape=embedding_dim)
+
+        # Multi-Head Attention layer
+        self.multihead_attn = nn.MultiheadAttention(embed_dim=embedding_dim,
+                                                    num_heads=num_heads,
+                                                    dropout=attn_dropout,
+                                                    batch_first=True)
+
+    def forward(self, x):
+        x = self.layer_norm(x)
+        attn_output, _ = self.multihead_attn(query=x,
+                                             key=x,
+                                             value=x,
+                                             need_weights=False)
+        return attn_output
+
+# MLP (Multilayer Perceptron) Class
+class MLPBlock(nn.Module):
+    """Creates a Layer Normalized Multilayer Perceptron block."""
+    def __init__(self,
+                 embedding_dim:int=3*3*3,
+                 mlp_size:int=3072,
+                 dropout:float=0.1):
+        super().__init__()
+
+        # Norm layer
+        self.layer_norm = nn.LayerNorm(normalized_shape=embedding_dim)
+
+        # MLP layer
+        self.mlp = nn.Sequential(
+            nn.Linear(in_features=embedding_dim,
+                      out_features=mlp_size),
+            nn.GELU(),
+            nn.Dropout(p=dropout),
+            nn.Linear(in_features=mlp_size,
+                      out_features=embedding_dim),
+            nn.Dropout(p=dropout)
+        )
+
+    def forward(self, x):
+        x = self.layer_norm(x)
+        x = self.mlp(x)
+        return x
+
+# Transformer Encoder Class
+class TransformerEncoderBlock(nn.Module):
+    """
+    Creates a Transformer Encoder block.
+    """
+
+    def __init__(self,
+                 embedding_dim:int=3*3*3,
+                 num_heads:int=3,
+                 mlp_size:int=3072,
+                 mlp_dropout:float=0.1,
+                 attn_dropout:float=0):
+        super().__init__()
+
+        # Multi-head Self Attention Block
+        self.msa_block = MultiheadSelfAttentionBlock(embedding_dim=embedding_dim,
+                                                     num_heads=num_heads,
+                                                     attn_dropout=attn_dropout)
+
+        # MLP Block
+        self.mlp_block =  MLPBlock(embedding_dim=embedding_dim,
+                                   mlp_size=mlp_size,
+                                   dropout=mlp_dropout)
+
+    def forward(self, x):
+
+        x =  self.msa_block(x) + x
+        x = self.mlp_block(x) + x
+
+        return x
+
+"""# **Xception Model Functions**"""
+
+# References: https://github.com/tstandley/Xception-PyTorch/blob/master/xception.py
+
+# Separable Conv2D Class
+class SeparableConv2d(nn.Module):
+    def __init__(self,in_channels,out_channels,kernel_size=1,stride=1,padding=0,dilation=1,bias=False):
+        super(SeparableConv2d,self).__init__()
+
+        self.conv1 = nn.Conv2d(in_channels,in_channels,kernel_size,stride,padding,dilation,groups=in_channels,bias=bias)
+        self.pointwise = nn.Conv2d(in_channels,out_channels,1,1,0,1,1,bias=bias)
+
+    def forward(self,x):
+        x = self.conv1(x)
+        x = self.pointwise(x)
+        return x
+
+# Xception Block Class
+class Block(nn.Module):
+    def __init__(self,in_filters,out_filters,reps,strides=1,start_with_relu=True,grow_first=True):
+        super(Block, self).__init__()
+
+        if out_filters != in_filters or strides!=1:
+            self.skip = nn.Conv2d(in_filters,out_filters,1,stride=strides, bias=False)
+            self.skipbn = nn.BatchNorm2d(out_filters)
+        else:
+            self.skip=None
+
+        self.relu = nn.ReLU(inplace=True)
+        rep=[]
+
+        filters=in_filters
+        if grow_first:
+            rep.append(self.relu)
+            rep.append(SeparableConv2d(in_filters,out_filters,3,stride=1,padding=1,bias=False))
+            rep.append(nn.BatchNorm2d(out_filters))
+            filters = out_filters
+
+        for i in range(reps-1):
+            rep.append(self.relu)
+            rep.append(SeparableConv2d(filters,filters,3,stride=1,padding=1,bias=False))
+            rep.append(nn.BatchNorm2d(filters))
+
+        if not grow_first:
+            rep.append(self.relu)
+            rep.append(SeparableConv2d(in_filters,out_filters,3,stride=1,padding=1,bias=False))
+            rep.append(nn.BatchNorm2d(out_filters))
+
+        if not start_with_relu:
+            rep = rep[1:]
+        else:
+            rep[0] = nn.ReLU(inplace=False)
+
+        if strides != 1:
+            rep.append(nn.MaxPool2d(3,strides,1))
+        self.rep = nn.Sequential(*rep)
+
+    def forward(self,inp):
+        x = self.rep(inp)
+
+        if self.skip is not None:
+            skip = self.skip(inp)
+            skip = self.skipbn(skip)
+        else:
+            skip = inp
+
+        x+=skip
+        return x
+
+class Xception(nn.Module):
+    def __init__(self):
+        super(Xception, self).__init__()
+
+        self.conv1 = nn.Conv2d(3, 32, 3, 2, 0, bias=False)
+        self.bn1 = nn.BatchNorm2d(32)
+        self.relu = nn.ReLU(inplace=True)
+
+        self.conv2 = nn.Conv2d(32,64,3,bias=False)
+        self.bn2 = nn.BatchNorm2d(64)
+
+        self.block1=Block(64,128,2,2,start_with_relu=False,grow_first=True)
+        self.block2=Block(128,256,2,2,start_with_relu=True,grow_first=True)
+        self.block3=Block(256,728,2,2,start_with_relu=True,grow_first=True)
+
+        self.block4=Block(728,728,3,1,start_with_relu=True,grow_first=True)
+        self.block5=Block(728,728,3,1,start_with_relu=True,grow_first=True)
+        self.block6=Block(728,728,3,1,start_with_relu=True,grow_first=True)
+        self.block7=Block(728,728,3,1,start_with_relu=True,grow_first=True)
+
+        self.block8=Block(728,728,3,1,start_with_relu=True,grow_first=True)
+        self.block9=Block(728,728,3,1,start_with_relu=True,grow_first=True)
+        self.block10=Block(728,728,3,1,start_with_relu=True,grow_first=True)
+        self.block11=Block(728,728,3,1,start_with_relu=True,grow_first=True)
+
+        self.block12=Block(728,1024,2,2,start_with_relu=True,grow_first=False)
+
+        self.conv3 = SeparableConv2d(1024,1536,3,1,1)
+        self.bn3 = nn.BatchNorm2d(1536)
+
+        self.conv4 = SeparableConv2d(1536,2048,3,1,1)
+        self.bn4 = nn.BatchNorm2d(2048)
+
+        self.upsample = nn.Upsample((2, 2))
+        self.convtranspose = nn.ConvTranspose2d(2048, 3, kernel_size=5, stride=4)
+
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+                m.weight.data.normal_(0, math.sqrt(2. / n))
+            elif isinstance(m, nn.BatchNorm2d):
+                m.weight.data.fill_(1)
+                m.bias.data.zero_()
+
+
+    def forward(self, x):
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu(x)
+
+        x = self.conv2(x)
+        x = self.bn2(x)
+        x = self.relu(x)
+
+        x = self.block1(x)
+        x = self.block2(x)
+        x = self.block3(x)
+        x = self.block4(x)
+        x = self.block5(x)
+        x = self.block6(x)
+        x = self.block7(x)
+        x = self.block8(x)
+        x = self.block9(x)
+        x = self.block10(x)
+        x = self.block11(x)
+        x = self.block12(x)
+
+        x = self.conv3(x)
+        x = self.bn3(x)
+        x = self.relu(x)
+
+        x = self.conv4(x)
+        x = self.bn4(x)
+        x = self.relu(x)
+
+        x = self.upsample(x)
+        x = self.upsample(x)
+        x = self.convtranspose(x)
+
+        return x
+
+"""# **FINAL MODEL**"""
+
+class ViT(nn.Module):
+    """Creates a Vision Transformer architecture with Xception Model backbone."""
+    # 2. Initialize the class with hyperparameters from Table 1 and Table 3
+    def __init__(self,
+                 img_size:int=9, # Feature map resolution
+                 in_channels:int=3, # Number of channels in input feature map
+                 patch_size:int=3, # Patch size
+                 num_transformer_layers:int=12,
+                 embedding_dim:int=3*3*3,
+                 mlp_size:int=3072, # MLP size
+                 num_heads:int=3,
+                 attn_dropout:float=0, # Dropout for Attention Projection
+                 mlp_dropout:float=0.1, # Dropout for MLP layers
+                 embedding_dropout:float=0.1, # Dropout for Patch and Position Embeddings
+                 num_classes:int=43): # Total number of traffic sign classes
+
+        super().__init__()
+
+        self.xception_model = Xception()
+
+        # Calculate Number of Patches ((height * width)/(patch^2))
+        self.num_patches = (img_size * img_size) // patch_size**2
+
+        # Learnable Class Embedding
+        self.class_embedding = nn.Parameter(data=torch.randn(1, 1, embedding_dim),
+                                            requires_grad=True)
+
+        # Learnable Position Embedding
+        self.position_embedding = nn.Parameter(data=torch.randn(1, self.num_patches+1, embedding_dim),
+                                               requires_grad=True)
+
+        # Embedding Dropout
+        self.embedding_dropout = nn.Dropout(p=embedding_dropout)
+
+        # Patch Embedding Layer
+        self.patch_embedding = PatchEmbedding(in_channels=in_channels,
+                                              patch_size=patch_size,
+                                              embedding_dim=embedding_dim)
+
+        # Create Transformer Encoder Blocks
+        self.transformer_encoder = nn.Sequential(*[TransformerEncoderBlock(embedding_dim=embedding_dim,
+                                                                            num_heads=num_heads,
+                                                                            mlp_size=mlp_size,
+                                                                            mlp_dropout=mlp_dropout) for _ in range(num_transformer_layers)])
+
+        # Create Classifier Head
+        self.classifier = nn.Sequential(
+            nn.LayerNorm(normalized_shape=embedding_dim),
+            nn.Linear(in_features=embedding_dim,
+                      out_features=num_classes)
+        )
+
+    def forward(self, x):
+
+        x = self.xception_model(x)
+
+        # Get Batch size
+        batch_size = x.shape[0]
+
+        class_token = self.class_embedding.expand(batch_size, -1, -1)
+
+        x = self.patch_embedding(x)
+        x = torch.cat((class_token, x), dim=1)
+        x = self.position_embedding + x
+
+        x = self.embedding_dropout(x)
+        x = self.transformer_encoder(x)
+
+        x = self.classifier(x[:, 0])
+
+        return x
+
+"""# **Prepare Training Requirements**"""
+
+# References: https://github.com/mrdbourke/pytorch-deep-learning/blob/main/going_modular/going_modular/engine.py
+
+def train_step(model: torch.nn.Module,
+               dataloader: torch.utils.data.DataLoader,
+               loss_fn: torch.nn.Module,
+               optimizer: torch.optim.Optimizer,
+               device: torch.device,
+               train_acc_metric,
+               train_f1_metric,
+               train_recall_metric,
+               train_prec_metric) -> Tuple[float, float, float, float, float]:
+
+    model.train()
+
+    train_loss, acc, f1, recall, precision = 0, 0, 0, 0, 0
+
+    for batch, (X, y) in tqdm(enumerate(dataloader)):
+        X, y = X.to(device), y.to(device)
+
+        # Forward pass
+        y_pred = model(X)
+
+        # Calculate and accumulate loss
+        loss = loss_fn(y_pred, y)
+        train_loss += loss.item()
+
+        # Zero gradients
+        optimizer.zero_grad()
+
+        # Backward pass
+        loss.backward()
+
+        # Optimizer step
+        optimizer.step()
+
+        # Update metrics
+        y_pred_class = torch.argmax(torch.softmax(y_pred, dim=1), dim=1)
+        acc += train_acc_metric(y_pred_class, y)
+        f1 += train_f1_metric(y_pred_class, y)
+        recall += train_recall_metric(y_pred_class, y)
+        precision += train_prec_metric(y_pred_class, y)
+
+    # Compute metrics
+    train_loss = train_loss / len(dataloader)
+    train_acc = acc / len(dataloader)
+    train_f1 = f1 / len(dataloader)
+    train_rec = recall / len(dataloader)
+    train_precision = precision / len(dataloader)
+
+    return train_loss, train_acc, train_f1, train_rec, train_precision
+
+def test_step(model: torch.nn.Module,
+              dataloader: torch.utils.data.DataLoader,
+              loss_fn: torch.nn.Module,
+              device: torch.device,
+              test_f1_metric,
+              test_recall_metric,
+              test_acc_metric,
+              test_prec_metric) -> Tuple[float, float, float, float, float]:
+
+    model.eval()
+
+    test_loss, acc, f1, recall, precision = 0, 0, 0, 0, 0
+
+    with torch.no_grad():
+        for batch, (X, y) in tqdm(enumerate(dataloader)):
+            X, y = X.to(device), y.to(device)
+
+            # Forward pass
+            y_pred = model(X)
+
+            # Calculate and accumulate loss
+            loss = loss_fn(y_pred, y)
+            test_loss += loss.item()
+
+            # Update metrics
+            y_pred_class = torch.argmax(torch.softmax(y_pred, dim=1), dim=1)
+            acc += test_acc_metric(y_pred_class, y)
+            f1 += test_f1_metric(y_pred_class, y)
+            recall += test_recall_metric(y_pred_class, y)
+            precision += test_prec_metric(y_pred_class, y)
+
+    # Compute metrics
+    test_loss = test_loss / len(dataloader)
+    test_acc = acc / len(dataloader)
+    test_f1 = f1 / len(dataloader)
+    test_rec = recall / len(dataloader)
+    test_precision = precision / len(dataloader)
+
+    return test_loss, test_acc, test_f1, test_rec, test_precision
+
+def train(model: torch.nn.Module,
+          train_dataloader: torch.utils.data.DataLoader,
+          test_dataloader: torch.utils.data.DataLoader,
+          optimizer: torch.optim.Optimizer,
+          loss_fn: torch.nn.Module,
+          epochs: int,
+          device: torch.device) -> Dict[str, List]:
+
+    # Initialize metrics
+    train_acc_metric = Accuracy(task="multiclass", num_classes=43).to(device)
+    train_f1_metric = F1Score(task="multiclass", average='macro', num_classes=43).to(device)
+    train_recall_metric = Recall(task="multiclass", average='macro', num_classes=43).to(device)
+    train_prec_metric = Precision(task="multiclass", average='macro', num_classes=43).to(device)
+
+    test_acc_metric = Accuracy(task="multiclass", num_classes=43).to(device)
+    test_f1_metric = F1Score(task="multiclass", average='macro', num_classes=43).to(device)
+    test_recall_metric = Recall(task="multiclass", average='macro', num_classes=43).to(device)
+    test_prec_metric = Precision(task="multiclass", average='macro', num_classes=43).to(device)
+
+    results = {"train_loss": [],
+               "train_acc": [],
+               "train_f1_score": [],
+               "train_recall": [],
+               "train_precision": [],
+               "val_loss": [],
+               "val_acc": [],
+               "val_f1_score": [],
+               "val_recall": [],
+               "val_precision": []
+    }
+
+    model.to(device)
+
+    for epoch in range(epochs):
+        if epoch in [32, 64, 96]:
+            torch.save(
+                obj=model.state_dict(),
+                f=f"/kaggle/working/epoch_{epoch+1}.pth"
+            )
+
+        train_loss, train_acc, train_f1_score, train_recall, train_precision = train_step(model=model,
+                                          dataloader=train_dataloader,
+                                          loss_fn=loss_fn,
+                                          optimizer=optimizer,
+                                          device=device,
+                                          train_acc_metric=train_acc_metric,
+                                          train_f1_metric=train_f1_metric,
+                                          train_recall_metric=train_recall_metric,
+                                          train_prec_metric=train_prec_metric)
+
+        test_loss, test_acc, test_f1_score, test_recall, test_precision = test_step(model=model,
+                                  dataloader=test_dataloader,
+                                  loss_fn=loss_fn,
+                                  device=device,
+                                  test_acc_metric=test_acc_metric,
+                                  test_f1_metric=test_f1_metric,
+                                  test_recall_metric=test_recall_metric,
+                                  test_prec_metric=test_prec_metric)
+
+        print(
+          f"Epoch: {epoch+1} | "
+          f"train_loss: {train_loss:.4f} | "
+          f"train_acc: {train_acc:.4f} | "
+          f"train_F1_score: {train_f1_score:.4f} | "
+          f"train_recall: {train_recall:.4f} | "
+          f"train_precision: {train_precision:.4f} | "
+          f"val_loss: {test_loss:.4f} | "
+          f"val_acc: {test_acc:.4f} | "
+          f"val_F1_score: {test_f1_score:.4f} | "
+          f"val_recall: {test_recall:.4f} | "
+          f"val_precision: {test_precision:.4f}"
+        )
+
+        results["train_loss"].append(train_loss)
+        results["train_acc"].append(train_acc)
+        results["train_f1_score"].append(train_f1_score)
+        results["train_recall"].append(train_recall)
+        results["train_precision"].append(train_precision)
+        results["val_loss"].append(test_loss)
+        results["val_acc"].append(test_acc)
+        results["val_f1_score"].append(test_f1_score)
+        results["val_recall"].append(test_recall)
+        results["val_precision"].append(test_precision)
+
+    return results
+
+"""# **Train Model**"""
+
+# Initialize Model
+model = ViT()
+
+# Initialize optimizer, loss and device to train on
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001, betas=(0.5, 0.999))
+loss = nn.CrossEntropyLoss()
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
+# Train the model and store the results in "history" variable
+history = train(model=model,
+       train_dataloader=train_dataloader,
+       test_dataloader=val_dataloader,
+       optimizer=optimizer,
+       loss_fn=loss,
+       epochs=32,
+       device=device)
+
+# Save Model
+torch.save(
+        obj=model.state_dict(),
+        f=f"/kaggle/working/128_epochs.pth"
+)
+
+"""# **Results**"""
+
+# Load Model
+checkpoint = torch.load("//kaggle/input/xception-vit/128_epochs.pth")
+model.load_state_dict(checkpoint)
+
+# Visualize Predictions
+
+import random
+from PIL import Image
+import matplotlib.pyplot as plt
+
+model = model.to(device)
+model.eval()
+
+def predict_image_class(image_path, model):
+    # Load and transform the image
+    image = Image.open(image_path)
+    image_tensor = transform(image).unsqueeze(0).to(device)
+
+    # Make a prediction
+    with torch.no_grad():
+        output = model(image_tensor)
+
+    # Get the predicted class
+    _, predicted = torch.max(output, 1)
+    predicted_class = predicted.item()
+
+    return predicted_class
+
+# Define the directory containing the class folders
+directory = '/kaggle/input/adversarial-gtsrb-data/Adversarial-GTSRB-Data'
+class_names = os.listdir(directory)
+
+# Initialize an empty list to store the image paths
+image_paths = []
+CLASSES = []
+
+for _ in range(6):
+    random_class = random.choice(class_names)
+    random_class_dir = os.path.join(directory, random_class)
+    random_img = random.choice(os.listdir(random_class_dir))
+    random_img_dir = os.path.join(random_class_dir, random_img)
+    image_paths.append(random_img_dir)
+    CLASSES.append(random_img_dir.split('/')[-2])
+
+# Predict and plot
+fig, axs = plt.subplots(3, 2, figsize=(8, 8))
+
+for i, ax in enumerate(axs.flat):
+    image_path = image_paths[i]
+
+    # Predict the class of the image
+    predicted_class = predict_image_class(image_path, model)
+
+    # Load the image for plotting
+    image = Image.open(image_path)
+
+    # Display the image and its predicted class
+    ax.imshow(image)
+    ax.set_title(f'Original: {CLASSES[i]}\nPredicted: {classes[predicted_class]}')
+    ax.axis('off')
+
+plt.tight_layout()
+plt.show()
+
+# Plot Confusion Matrix
+y_pred_classes = torch.tensor([])
+y_true = torch.tensor([])
+class_names = os.listdir('/kaggle/input/adversarial-gtsrb-data/Adversarial-GTSRB-Data')
+
+# Set the model to evaluation mode
+model.eval()
+
+with torch.no_grad():  # Deactivate gradients for the following code
+    for x, y in val_dataloader:
+        # Move the training data to the GPU
+        x = x.to(device)
+        y = y.to(device)
+
+        # Forward pass
+        out = model(x)
+
+        # Predicted class is the one with highest probability
+        _, predicted = torch.max(out, dim=1)
+
+        # Join the predicted classes
+        y_pred_classes = torch.cat([y_pred_classes, predicted.cpu()])
+
+        # Join the correct classes
+        y_true = torch.cat([y_true, y.cpu()])
+
+from sklearn.metrics import confusion_matrix
+import matplotlib.pyplot as plt
+import numpy as np
+
+cm = confusion_matrix(y_true.numpy(), y_pred_classes.numpy())
+
+plt.figure(figsize=(20, 20))
+plt.imshow(cm, interpolation='nearest', cmap=plt.cm.PuRd)
+plt.title('Confusion Matrix')
+plt.colorbar(shrink=0.5)
+tick_marks = np.arange(len(class_names))
+plt.xticks(tick_marks, class_names, rotation=90)
+plt.yticks(tick_marks, class_names)
+
+cm_normalized = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+
+plt.tight_layout()
+plt.ylabel('True label')
+plt.xlabel('Predicted label')
+plt.show()
+
+# Plot ROC Curve
+import torch
+import torch.nn.functional as F
+
+y_score = torch.tensor([])
+y_true = torch.tensor([])
+n_classes = 43
+
+# Set the model to evaluation mode
+model.eval()
+
+with torch.no_grad():  # Deactivate gradients for the following code
+    for x, y in val_dataloader:
+        # Move the data to the GPU
+        x = x.to(device)
+        y = y.to(device)
+
+        # Forward pass
+        out = model(x)
+
+        # Apply softmax to the output to get probabilities
+        probs = F.softmax(out, dim=1)
+
+        # Concatenate the probabilities and true labels
+        y_score = torch.cat([y_score, probs.cpu()])
+        y_true = torch.cat([y_true, y.cpu()])
+
+from sklearn.preprocessing import label_binarize
+y_true_bin = label_binarize(y_true.numpy(), classes=np.arange(n_classes))
+
+from sklearn.metrics import roc_curve, auc
+import matplotlib.pyplot as plt
+from itertools import cycle
+
+fpr = dict()
+tpr = dict()
+roc_auc = dict()
+for i in range(n_classes):
+    fpr[i], tpr[i], _ = roc_curve(y_true_bin[:, i], y_score[:, i].numpy())
+    roc_auc[i] = auc(fpr[i], tpr[i])
+
+# Plot ROC curves
+plt.figure(figsize=(16, 25))
+colors = cycle(['aqua', 'darkorange', 'cornflowerblue'])
+for i, color in zip(range(n_classes), colors):
+    plt.plot(fpr[i], tpr[i], color=color, lw=2,
+             label=f'ROC curve (class {i}, area = {roc_auc[i]:.2f})')
+
+plt.plot([0, 1], [0, 1], 'k--', lw=2)
+plt.xlim([0.0, 1.0])
+plt.ylim([0.0, 1.05])
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('Receiver Operating Characteristic (ROC) Curve')
+plt.legend(loc="lower right")
+plt.show()
