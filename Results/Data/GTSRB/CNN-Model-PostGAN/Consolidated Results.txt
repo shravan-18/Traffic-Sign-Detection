@@ -1,0 +1,23 @@
+ResNet50 - training: 0.98
+	   validation: 0.88
+
+MobileNetV2 - training: 0.71
+	      validation: 0.53
+
+EfficientNetB0 - training: 0.97
+		 validation: 0.94
+
+EfficientNetV2B0 - training: 0.95
+		   validation: 0.91
+
+Xception - training: 0.99
+	   validation: 0.98
+
+Inception - training: 0.97
+	    validation: 0.94
+
+VGG19 - training: 0.03
+	validation: 0.03
+
+NASNet - training: 0.09
+	 validation: 0.14
