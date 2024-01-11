@@ -82,3 +82,39 @@ Epoch 10/128
 5281/5281 [==============================] - ETA: 0s - loss: 0.0068 - accuracy: 0.9450 - precision: 0.9546 - f1_score: 0.9469 - recall: 0.9398 - categorical_accuracy: 0.9450 - auc: 0.9956
 Epoch 10: val_loss did not improve from 0.00716
 5281/5281 [==============================] - 3552s 673ms/step - loss: 0.0068 - accuracy: 0.9450 - precision: 0.9546 - f1_score: 0.9469 - recall: 0.9398 - categorical_accuracy: 0.9450 - auc: 0.9956 - val_loss: 0.0083 - val_accuracy: 0.9353 - val_precision: 0.9452 - val_f1_score: 0.9365 - val_recall: 0.9299 - val_categorical_accuracy: 0.9353 - val_auc: 0.9923 - lr: 0.0010
+Epoch 1/10
+5281/5281 [==============================] - ETA: 0s - loss: 0.0071 - accuracy: 0.9427 - precision: 0.9524 - f1_score: 0.9444 - recall: 0.9371 - categorical_accuracy: 0.9427 - auc: 0.9955
+Epoch 1: val_loss improved from inf to 0.00602, saving model to files/model.h5
+/opt/conda/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+5281/5281 [==============================] - 3705s 691ms/step - loss: 0.0071 - accuracy: 0.9427 - precision: 0.9524 - f1_score: 0.9444 - recall: 0.9371 - categorical_accuracy: 0.9427 - auc: 0.9955 - val_loss: 0.0060 - val_accuracy: 0.9512 - val_precision: 0.9596 - val_f1_score: 0.9524 - val_recall: 0.9463 - val_categorical_accuracy: 0.9512 - val_auc: 0.9960 - lr: 0.0010
+Epoch 2/10
+5281/5281 [==============================] - ETA: 0s - loss: 0.0068 - accuracy: 0.9454 - precision: 0.9548 - f1_score: 0.9470 - recall: 0.9399 - categorical_accuracy: 0.9454 - auc: 0.9956
+Epoch 2: val_loss did not improve from 0.00602
+5281/5281 [==============================] - 3551s 672ms/step - loss: 0.0068 - accuracy: 0.9454 - precision: 0.9548 - f1_score: 0.9470 - recall: 0.9399 - categorical_accuracy: 0.9454 - auc: 0.9956 - val_loss: 0.0063 - val_accuracy: 0.9474 - val_precision: 0.9556 - val_f1_score: 0.9489 - val_recall: 0.9433 - val_categorical_accuracy: 0.9474 - val_auc: 0.9955 - lr: 0.0010
+Epoch 3/10
+5281/5281 [==============================] - ETA: 0s - loss: 0.0064 - accuracy: 0.9486 - precision: 0.9568 - f1_score: 0.9499 - recall: 0.9435 - categorical_accuracy: 0.9486 - auc: 0.9959
+Epoch 3: val_loss did not improve from 0.00602
+5281/5281 [==============================] - 3546s 671ms/step - loss: 0.0064 - accuracy: 0.9486 - precision: 0.9568 - f1_score: 0.9499 - recall: 0.9435 - categorical_accuracy: 0.9486 - auc: 0.9959 - val_loss: 0.0066 - val_accuracy: 0.9461 - val_precision: 0.9543 - val_f1_score: 0.9474 - val_recall: 0.9417 - val_categorical_accuracy: 0.9461 - val_auc: 0.9946 - lr: 0.0010
+Epoch 4/10
+5281/5281 [==============================] - ETA: 0s - loss: 0.0062 - accuracy: 0.9500 - precision: 0.9581 - f1_score: 0.9514 - recall: 0.9452 - categorical_accuracy: 0.9500 - auc: 0.9961
+Epoch 4: val_loss did not improve from 0.00602
+5281/5281 [==============================] - 3548s 672ms/step - loss: 0.0062 - accuracy: 0.9500 - precision: 0.9581 - f1_score: 0.9514 - recall: 0.9452 - categorical_accuracy: 0.9500 - auc: 0.9961 - val_loss: 0.0060 - val_accuracy: 0.9510 - val_precision: 0.9577 - val_f1_score: 0.9518 - val_recall: 0.9471 - val_categorical_accuracy: 0.9510 - val_auc: 0.9953 - lr: 0.0010
+Epoch 5/10
+5281/5281 [==============================] - ETA: 0s - loss: 0.0059 - accuracy: 0.9526 - precision: 0.9603 - f1_score: 0.9540 - recall: 0.9481 - categorical_accuracy: 0.9526 - auc: 0.9961
+Epoch 5: val_loss did not improve from 0.00602
+5281/5281 [==============================] - 3552s 673ms/step - loss: 0.0059 - accuracy: 0.9526 - precision: 0.9603 - f1_score: 0.9540 - recall: 0.9481 - categorical_accuracy: 0.9526 - auc: 0.9961 - val_loss: 0.0063 - val_accuracy: 0.9493 - val_precision: 0.9566 - val_f1_score: 0.9502 - val_recall: 0.9450 - val_categorical_accuracy: 0.9493 - val_auc: 0.9953 - lr: 0.0010
+Epoch 1/10
+5281/5281 [==============================] - ETA: 0s - loss: 0.0072 - accuracy: 0.9423 - precision: 0.9520 - f1_score: 0.9439 - recall: 0.9364 - categorical_accuracy: 0.9423 - auc: 0.9952
+Epoch 1: val_loss improved from inf to 0.00591, saving model to files/model.h5
+/opt/conda/lib/python3.10/site-packages/keras/src/engine/training.py:3000: UserWarning: You are saving your model as an HDF5 file via `model.save()`. This file format is considered legacy. We recommend using instead the native Keras format, e.g. `model.save('my_model.keras')`.
+  saving_api.save_model(
+5281/5281 [==============================] - 3682s 687ms/step - loss: 0.0072 - accuracy: 0.9423 - precision: 0.9520 - f1_score: 0.9439 - recall: 0.9364 - categorical_accuracy: 0.9423 - auc: 0.9952 - val_loss: 0.0059 - val_accuracy: 0.9519 - val_precision: 0.9600 - val_f1_score: 0.9529 - val_recall: 0.9471 - val_categorical_accuracy: 0.9519 - val_auc: 0.9966 - lr: 0.0010
+Epoch 2/10
+5281/5281 [==============================] - ETA: 0s - loss: 0.0068 - accuracy: 0.9452 - precision: 0.9545 - f1_score: 0.9468 - recall: 0.9397 - categorical_accuracy: 0.9452 - auc: 0.9958
+Epoch 2: val_loss did not improve from 0.00591
+5281/5281 [==============================] - 3548s 672ms/step - loss: 0.0068 - accuracy: 0.9452 - precision: 0.9545 - f1_score: 0.9468 - recall: 0.9397 - categorical_accuracy: 0.9452 - auc: 0.9958 - val_loss: 0.0066 - val_accuracy: 0.9462 - val_precision: 0.9538 - val_f1_score: 0.9471 - val_recall: 0.9417 - val_categorical_accuracy: 0.9462 - val_auc: 0.9948 - lr: 0.0010
+Epoch 3/10
+5281/5281 [==============================] - ETA: 0s - loss: 0.0065 - accuracy: 0.9479 - precision: 0.9565 - f1_score: 0.9495 - recall: 0.9430 - categorical_accuracy: 0.9479 - auc: 0.9959
+Epoch 3: val_loss improved from 0.00591 to 0.00579, saving model to files/model.h5
+5281/5281 [==============================] - 3548s 672ms/step - loss: 0.0065 - accuracy: 0.9479 - precision: 0.9565 - f1_score: 0.9495 - recall: 0.9430 - categorical_accuracy: 0.9479 - auc: 0.9959 - val_loss: 0.0058 - val_accuracy: 0.9527 - val_precision: 0.9593 - val_f1_score: 0.9536 - val_recall: 0.9491 - val_categorical_accuracy: 0.9527 - val_auc: 0.9959 - lr: 0.0010
