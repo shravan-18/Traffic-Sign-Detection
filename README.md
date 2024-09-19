@@ -1,4 +1,4 @@
-# Traffic Sign Classification with WCM-DCGAN and Xception-based Vision Transformer
+# Traffic Sign Classification with WCM-DCGAN and Xception-Enhanced Vision Transformer
 
 This repository showcases my work on generating and classifying weather-conditioned traffic sign images using a custom GAN and Vision Transformer. By introducing a **Weather Conditioning Module (WCM)** into a traditional **DCGAN**, I generated realistic traffic sign images under various weather conditions. These images were later processed through an **Xception-backbone Vision Transformer**, improving classification accuracy in adverse scenarios.
 
