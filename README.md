@@ -32,3 +32,4 @@ By combining **WCM-DCGAN** for dataset augmentation and an **Xception-based Visi
 - [Santhosh Malarvannan](https://github.com/Sandy055)
 - [Shriyans Anumalasetty](https://github.com/Shriyans03)
 - [Jashwanth R](https://github.com/jashwanthrk)
+- [Joe Dhanith P R](https://github.com)
