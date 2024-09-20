@@ -27,8 +27,8 @@ By combining **WCM-DCGAN** for dataset augmentation and an **Xception-based Visi
 
 ## Contributors
 
-- [Shravan Venkatraman](https://github.com/member1)
-- [Abeshek A](https://github.com/member2)
-- [Santhosh Malarvannan](https://github.com/member3)
-- [Shriyans Anumalasetty](https://github.com/member4)
-- [Jashwanth R](https://github.com/member5)
+- [Shravan Venkatraman](https://github.com/shravan-18)
+- [Abeshek A](https://github.com/Abeshek-03)
+- [Santhosh Malarvannan](https://github.com/Sandy055)
+- [Shriyans Anumalasetty](https://github.com/Shriyans03)
+- [Jashwanth R](https://github.com/jashwanthrk)
